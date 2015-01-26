@@ -1,4 +1,4 @@
 slonic
 ======
 
-Big Data Sandbox
+Machine learning algorithms in Scala. Slow work in progress.
