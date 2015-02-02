@@ -11,6 +11,8 @@ object LinearRegression extends App {
   val (labels, train) =  Iris.load()
   val clf = new LinearRegression()
   val X = train(::, 1 to 3)
+
+  // will be training to predict sepal length
   val y = train(::, 0)
   clf.fit(X, y)
 
