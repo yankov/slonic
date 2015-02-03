@@ -14,10 +14,10 @@ object LinearRegression extends App {
 
   // will be training to predict sepal length
   val y = train(::, 0)
-  clf.fit(X, y)
+  clf.fit(X, y, gradDescent = true)
 
-  val y_pred = clf.predict(X)
+  val yPred = clf.predict(X)
 
-  val error = sum(pow((y_pred - y), 2)) / y.length
+  val error = sum(pow((yPred - y), 2)) / y.length
   println(s"Standard Error: $error")
 }

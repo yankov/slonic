@@ -7,6 +7,12 @@ import scala.util.Try
 
 object Iris {
 
+  val featureNames = (
+    "sepal length (cm)",
+    "sepal width (cm)",
+    "petal length (cm)",
+    "petal width (cm)")
+
   def getDouble(v: => String, default: Double = .0): Double = Try(v.toDouble).getOrElse(default)
   def getString(v: => String, default: String = "NA"): String = Try(v).getOrElse(default)
 
