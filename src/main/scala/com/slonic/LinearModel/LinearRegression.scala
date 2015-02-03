@@ -34,7 +34,7 @@ class LinearRegression extends BaseEstimator {
     while(abs(J - e) > ep) {
       n_iter += 1
       J = e
-      thetha = thetha :- alpha *  sum(trainI.t * err) / m
+      thetha = thetha :- ((trainI.t * err) :* 1.0/m) * alpha
       err = (trainI * thetha) - y
       e = sum(pow(err, 2))
     }
