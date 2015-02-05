@@ -4,7 +4,6 @@ import breeze.linalg.{sum, inv, DenseVector, DenseMatrix}
 import breeze.numerics.{abs, pow}
 import com.slonic.base.BaseEstimator
 
-// βˆ = (X.T * X)^-1  * X.T * y,
 class LinearRegression extends BaseEstimator {
 
   var beta1: DenseVector[Double] = DenseVector[Double]()

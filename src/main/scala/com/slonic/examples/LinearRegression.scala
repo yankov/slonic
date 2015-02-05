@@ -2,7 +2,7 @@ package com.slonic.examples
 
 import breeze.linalg.sum
 import breeze.numerics.pow
-import com.slonic.LinearModel.LinearRegression
+import com.slonic.LinearModel.{LinearRegression, SGDRegressor}
 import com.slonic.datasets.Iris
 
 object LinearRegression extends App {
@@ -46,6 +46,15 @@ object LinearRegression extends App {
   time { clf.fitGradientDescentNonVec(X, y) }
 
   yPred = clf.predict(X)
+
+  error = sum(pow((yPred - y), 2)) / y.length
+  println(s"Standard Error: $error")
+
+  println("Fitting using Stochastic Gradient descent")
+  val sgdClf = new SGDRegressor()
+  time { sgdClf.fit(X, y) }
+
+  yPred = sgdClf.predict(X)
 
   error = sum(pow((yPred - y), 2)) / y.length
   println(s"Standard Error: $error")
