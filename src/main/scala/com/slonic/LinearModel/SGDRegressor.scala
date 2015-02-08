@@ -36,7 +36,7 @@ class SGDRegressor extends BaseEstimator {
 
         for (i <- 0 to m - 1) {
           for (j <- 0 to trainI.cols - 1) {
-            t1(j) = t1(j) - alpha * 1.0 / m * (err(i) * trainI(i, j))
+            t1(j) = t1(j) - alpha * (err(i) * trainI(i, j))
           }
           err = (trainI * t1) - y
           e = sum(pow(err, 2))
