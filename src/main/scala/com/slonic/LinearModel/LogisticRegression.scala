@@ -25,29 +25,36 @@ class LogisticRegression {
     ones / (exp(z0) + 1.0)
   }
 
-  // Looks very similar to stochastic linear regressor, except for logloss and hypothesis function
+  def cost(t1: DenseVector[Double], y: DenseVector[Double], yPred: DenseVector[Double], lambda: Double): Double = {
+     val m = y.length
+     -1.0/m * sum(logloss(y, yPred)) + lambda / 2*m * sum(t1 * t1.t)
+  }
+
+  // Looks very similar to linear regressor, except for logloss and hypothesis function
   def fit(train: DenseMatrix[Double], y: DenseVector[Double],
-          alpha: Double = .001, ep: Double = 0.0001,
-          maxIter: Int = 100000): Unit = {
+          alpha: Double = .1, ep: Double = 0.0001,
+          C: Double = 1.0, maxIter: Int = 100000): Unit = {
 
     var t1 = DenseVector.zeros[Double](train.cols + 1)
     val t0 = DenseMatrix.ones[Double](y.length, 1)
     val trainI = DenseMatrix.horzcat(t0, train)
+    val lambda = 1.0/C
 
     val m = train.rows
     var yPred = h(t1, trainI)
     var err = yPred - y
-    var e = -1.0/m * sum(logloss(y, yPred))
+    var e = cost(t1, y, yPred, lambda)
     var J = 100.0
     var nIter = 0
 
     while(abs(J - e) > ep && nIter <= maxIter) {
       nIter += 1
       J = e
-      t1 = t1 :- ((trainI.t * err) * alpha)
+      val reg = t1 :* (lambda / m)
+      t1 = t1 :- (((trainI.t * err) / m.toDouble) :+ reg) * alpha
       yPred = h(t1, trainI)
       err =  yPred - y
-      e = -1.0/m * sum(logloss(y, yPred))
+      e = cost(t1, y, yPred, lambda)
     }
 
     println(s"Converged in $nIter iterations")

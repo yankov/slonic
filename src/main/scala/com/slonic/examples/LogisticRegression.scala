@@ -15,7 +15,9 @@ object LogisticRegression extends App {
   val clf = new LogisticRegression()
   clf.fit(train, y)
 
-  val yPred = clf.predictProba(train)
+  val yPred = clf.predict(train)
+  println(yPred)
+  println(yPred.findAll(x => x == 1.0).length)
   val err = sum(logloss(y, yPred)) / y.length
   println(s"Logloss : $err")
 }
