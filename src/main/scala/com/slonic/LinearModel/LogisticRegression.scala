@@ -26,13 +26,13 @@ class LogisticRegression {
   }
 
   def cost(t1: DenseVector[Double], y: DenseVector[Double], yPred: DenseVector[Double], lambda: Double): Double = {
-     val m = y.length
-     -1.0/m * sum(logloss(y, yPred)) + lambda / 2*m * sum(t1 * t1.t)
+    val m = y.length
+    (-1.0/m) * sum(logloss(y, yPred)) + (lambda / (2*m)) * sum(t1 * t1.t)
   }
 
   // Looks very similar to linear regressor, except for logloss and hypothesis function
   def fit(train: DenseMatrix[Double], y: DenseVector[Double],
-          alpha: Double = .1, ep: Double = 0.0001,
+          alpha: Double = .001, ep: Double = 0.0001,
           C: Double = 1.0, maxIter: Int = 100000): Unit = {
 
     var t1 = DenseVector.zeros[Double](train.cols + 1)
@@ -51,7 +51,7 @@ class LogisticRegression {
       nIter += 1
       J = e
       val reg = t1 :* (lambda / m)
-      t1 = t1 :- (((trainI.t * err) / m.toDouble) :+ reg) * alpha
+      t1 = t1 :- (((trainI.t * err) / m.toDouble) + reg) * alpha
       yPred = h(t1, trainI)
       err =  yPred - y
       e = cost(t1, y, yPred, lambda)

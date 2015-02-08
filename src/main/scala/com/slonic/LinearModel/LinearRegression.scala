@@ -11,12 +11,12 @@ class LinearRegression extends BaseEstimator {
   def resetEstimator = beta1 = DenseVector[Double]()
 
   def fit(train: DenseMatrix[Double], y: DenseVector[Double],
-          gradDescent: Boolean = false, alpha: Double = 0.07,
-          ep: Double = 0.000001): Unit = {
+          gradDescent: Boolean = false, C: Double = 1.0, alpha: Double = 0.01,
+          ep: Double = 0.0001): Unit = {
     if(gradDescent)
-      fitGradientDescent(train, y)
+      fitGradientDescent(train, y, alpha, ep, C)
     else
-      fitMatrix(train, y)
+      fitMatrix(train, y, C)
   }
 
   /**
@@ -33,43 +33,49 @@ class LinearRegression extends BaseEstimator {
    */
 
   // Closed-form solution. The fastest and the simplest.
-  def fitMatrix(train: DenseMatrix[Double], y: DenseVector[Double]): Unit = {
+  def fitMatrix(train: DenseMatrix[Double], y: DenseVector[Double], C: Double=1.0): Unit = {
     val b1 = DenseMatrix.ones[Double](y.length, 1)
     val trainI = DenseMatrix.horzcat(b1, train)
-    beta1 = inv(trainI.t * trainI) * (trainI.t * y)
+    val eye = DenseMatrix.eye[Double](trainI.cols)
+    val lambda = 1 / C
+    val reg = eye * lambda
+
+    beta1 = inv(trainI.t * trainI + reg) * (trainI.t * y)
   }
 
   // Batch gradient descent solution. Maybe used when training set is too big.
   def fitGradientDescent(train: DenseMatrix[Double], y: DenseVector[Double],
-                         alpha: Double = 0.007, ep: Double = 0.000001,
-                         maxIter: Int = 1000000): Unit = {
+                         alpha: Double = 0.01, ep: Double = 0.0001,
+                         C: Double = 1.0, maxIter: Int = 1000000): Unit = {
 
-    var thetha = DenseVector.zeros[Double](train.cols + 1)
     val t0 = DenseMatrix.ones[Double](y.length, 1)
+    var t1 = DenseVector.zeros[Double](train.cols + 1)
     val trainI = DenseMatrix.horzcat(t0, train)
 
     val m = train.rows
-    var err = (trainI * thetha) - y
+    var err = (trainI * t1) - y
     var e = 10.0
     var J = 100.0
     var nIter = 0
+    val lambda = 1.0 / C
 
     while(abs(J - e) > ep && nIter <= maxIter) {
       nIter += 1
       J = e
-      thetha = thetha :- ((trainI.t * err) :* 1.0/m) * alpha
-      err = (trainI * thetha) - y
-      e = sum(pow(err, 2))
+      t1 = t1 :- (((trainI.t * err) / m.toDouble) :+ t1 * (lambda / m)) * alpha
+      err = (trainI * t1) - y
+
+      e = (sum(pow(err, 2)) + lambda * sum(t1 * t1.t)) / (2*m)
     }
 
     println(s"Converged in $nIter iterations")
-    beta1 = thetha
+    beta1 = t1
   }
 
   // Non vectorized solution for gradient descent.
   // Just in case you get lost with all matrix vectors multiplications
   def fitGradientDescentNonVec(train: DenseMatrix[Double], y: DenseVector[Double],
-                         alpha: Double = 0.007, ep: Double = 0.000001,
+                         alpha: Double = 0.01, ep: Double = 0.0001, C: Double = 1.0,
                          maxIter: Int = 1000000): Unit = {
 
     var t0 = DenseMatrix.ones[Double](y.length, 1)
@@ -85,18 +91,22 @@ class LinearRegression extends BaseEstimator {
     var e = 10.0
     var J = 100.0
     var nIter = 0
+    val lambda = 1.0 / C
+    var grad = 0.0
 
     while(abs(J - e) > ep && nIter <= maxIter) {
       nIter += 1
       J = e
-      for (i <- 0 to m - 1) {
-        for (j <- 0 to trainI.cols - 1) {
-          t1(j) = t1(j) - alpha * 1.0 / m * (err(i) * trainI(i, j))
+      for (j <- 0 to trainI.cols - 1) {
+        grad = 0.0
+        for (i <- 0 to m - 1) {
+          grad += err(i) * trainI(i, j)
         }
+        t1(j) = t1(j) - alpha * ((grad / m) + t1(j) * (lambda / m))
       }
 
       err = (trainI * t1) - y
-      e = sum(pow(err, 2))
+      e = (sum(pow(err, 2)) + lambda * sum(t1 * t1.t)) / (2*m)
     }
     println(s"Converged in $nIter iterations")
     beta1 = t1
