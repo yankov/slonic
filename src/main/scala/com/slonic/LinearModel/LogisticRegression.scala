@@ -32,7 +32,7 @@ class LogisticRegression {
 
   // Looks very similar to linear regressor, except for logloss and hypothesis function
   def fit(train: DenseMatrix[Double], y: DenseVector[Double],
-          alpha: Double = .01, ep: Double = 0.0001,
+          alpha: Double = .01, ep: Double = 0.00001,
           C: Double = 1.0, maxIter: Int = 100000): Unit = {
 
     var t1 = DenseVector.zeros[Double](train.cols + 1)

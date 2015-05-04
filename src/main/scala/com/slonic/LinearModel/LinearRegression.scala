@@ -43,6 +43,18 @@ class LinearRegression extends BaseEstimator {
     beta1 = inv(trainI.t * trainI + reg) * (trainI.t * y)
   }
 
+  def Jcost(x: DenseMatrix[Double], theta: DenseVector[Double], y: DenseVector[Double] ) = {
+    val m = x.rows
+    var err = (x * theta) - y
+    sum(pow(err, 2)) / (2*m.toDouble)
+  }
+
+  // Calculate gradient numerically for checking
+  def gradNumerical(x: DenseMatrix[Double], theta: DenseVector[Double], y: DenseVector[Double],
+                    ep: Double = 0.0001): Double = {
+    (Jcost(x, theta + ep, y) - Jcost(x, theta - ep, y)) / (2 * ep)
+  }
+
   // Batch gradient descent solution. Maybe used when training set is too big.
   def fitGradientDescent(train: DenseMatrix[Double], y: DenseVector[Double],
                          alpha: Double = 0.01, ep: Double = 0.0001,
@@ -62,7 +74,12 @@ class LinearRegression extends BaseEstimator {
     while(abs(J - e) > ep && nIter <= maxIter) {
       nIter += 1
       J = e
-      t1 = t1 :- (((trainI.t * err) / m.toDouble) :+ t1 * (lambda / m)) * alpha
+      val grad = (trainI.t * err) / m.toDouble
+//      println("Gradient")
+//      println(sum(grad))
+//      println("Numerical gradient")
+//      println(gradNumerical(trainI, t1, y))
+      t1 = t1 :- (grad :+ t1 * (lambda / m)) * alpha
       err = (trainI * t1) - y
 
       e = (sum(pow(err, 2)) + lambda * sum(t1 * t1.t)) / (2*m)

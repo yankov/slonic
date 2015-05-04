@@ -40,7 +40,6 @@ object LinearRegression extends App {
   error = sum(pow((yPred - y), 2)) / y.length
   println(s"Standard Error: $error")
 
-
   println("Fitting using Gradient descent (non vectorized solution)")
   clf.resetEstimator
   time { clf.fitGradientDescentNonVec(X, y) }
