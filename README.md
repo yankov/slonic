@@ -12,11 +12,11 @@ Done so far
     * Gradient descent (non-vectorized solution)
     * Stochastic gradient descent
 * Logistic regression
+* Perceptron
 
 Next in todo: Neural networks
 ====
 
-* Perceptron
-* Multilayer perceptron
+* Multi-layer neural network + backprop
 * Convolutional Neural Networks
 
