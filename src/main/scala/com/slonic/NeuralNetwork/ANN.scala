@@ -3,12 +3,12 @@ package com.slonic.NeuralNetwork
 import breeze.linalg._
 import breeze.numerics._
 
-class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0.9,
+class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0.8,
           ep: Double = 0.000001, maxIter: Int = 10000, C: Double = 1) {
 
   /* Constants for gradient checking */
   // Layer to check (running on all layers will take too long)
-  val LAYER_CHK = 1
+  val LAYER_CHK = 2
   // Number of neurons to check
   val NUM_NODES_CHK = 3
   // Number of weights to check (all of them by default)
@@ -17,7 +17,7 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
   // Acceptable order of difference between gradients
   val EPSILON_CHK = 10e-7
 
-  val lambda =  C
+  val lambda = alpha
   var weights = (0 to nHidden).map(x =>
     if (x < nHidden)
       DenseMatrix.rand[Double](inputSize + 1, inputSize + 1)
@@ -33,7 +33,7 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
   ).toArray
 
   // values for 'a' for different layers during forward-propagation
-  var aVec = DenseMatrix.zeros[Double](nHidden, inputSize + 1)
+  var aVec = DenseMatrix.zeros[Double](nHidden + 1, inputSize + 1)
 
   // Sigmoid function
   def g(z: DenseVector[Double]) = {
@@ -45,6 +45,7 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
   def h(x: DenseVector[Double], thetas: Array[DenseMatrix[Double]]): DenseVector[Double] = {
     var a = x
     var z = DenseVector[Double]()
+    aVec(0, ::).inner := a
 
     for (l <- 0 to thetas.length - 1) {
       z = thetas(l) * a
@@ -52,7 +53,7 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
 
       if(l < thetas.length - 1) {
         a.update(0, 1.0) // set the bias unit to 1
-        aVec(l, ::).inner := a
+        aVec(l + 1, ::).inner := a
       }
     }
 
@@ -62,7 +63,7 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
   def binarize(ys: DenseVector[Int]): DenseMatrix[Double] = {
     val kl = ys.toArray.toSet
     val ysBin = DenseMatrix.zeros[Double](ys.length, kl.size)
-    ys.data.zipWithIndex.foreach{case (y, i) => ysBin.update(i, y, 1.0)}
+    ys.data.zipWithIndex.foreach{case (y, i) => ysBin.update(i, y - 1, 1.0)}
     ysBin
   }
 
@@ -88,7 +89,6 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
 
     val ys = binarize(y)
     val ones = DenseVector.ones[Double](inputSize + 1)
-    val onesO = DenseVector.ones[Double](nOutput)
     val bias = DenseMatrix.ones[Double](train.rows, 1)
     val trainI = DenseMatrix.horzcat(bias, train)
 
@@ -103,20 +103,18 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
       e = cost
       for (i <- 0 to m - 1) {
         var a = h(trainI(i, ::).inner, weights) // a4
-        var da = a :* (onesO - a) // a4'
+        var sigmoidGrad = DenseVector[Double]()
         var delta = a - ys(i, ::).inner // delta4
 
-//        for (l <- weights.length - 1 to 1 by - 1) {
-//          a = aFP(l - 1, ::).inner
-//          da = a :* (ones - a)
-//          if(i == 0 && l == weights.length - 1) {
-//           // println(delta)
-//           // println(a)
-//          //  println(delta * a.t)
-//          }
-//          D(l) = D(l) + (delta * a.t)
-//          delta = weights(l).t * (delta :* da)
-//        }
+        for (l <- weights.length - 1 to 0 by - 1) {
+          a = aVec(l, ::).inner
+          D(l) = D(l) + (delta * a.t) // delta(l+1) * a.t(l)
+
+          sigmoidGrad = a :* (ones - a)
+          delta = (weights(l).t * delta) :* sigmoidGrad // delta(l) = theta(l) * delta(l+1) * a'
+        }
+
+   /*
         a = aVec(1, ::).inner // a3
         D(2) = D(2) + (delta * a.t) // delta4 * a3
 
@@ -131,6 +129,8 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
 
         a = trainI(i, ::).inner // a1
         D(0) = D(0) + (delta * a.t)
+   */
+
       }
 
       D = D.map(_ :/ m.toDouble)
@@ -138,6 +138,7 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
       // After the first run, compare values with numerically calculated gradients to make sure
       // there are no errors in backprop implementation
       if(nIter == 0 && checkGradients) {
+        println(s"Running gradient check for L=$LAYER_CHK")
         val grOk = areGradsOk(trainI, ys, LAYER_CHK, NUM_NODES_CHK, NUM_WEIGHTS_CHK)
         if(grOk)
           println("Gradients check: PASSED!")

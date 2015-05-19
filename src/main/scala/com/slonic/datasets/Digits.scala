@@ -6,6 +6,9 @@ import java.util.zip.GZIPInputStream
 import breeze.linalg.{DenseMatrix, DenseVector}
 import scala.io.Source
 
+/*
+ * This dataset was taken from scikit-learn
+ */
 object Digits {
   val NUM_FEATURES = 64
   def gis(s: InputStream) = new GZIPInputStream(new BufferedInputStream(s))
