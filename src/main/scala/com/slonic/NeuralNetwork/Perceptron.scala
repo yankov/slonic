@@ -9,7 +9,7 @@ class Perceptron(alpha: Double = 0.1, threshold: Double = 0.5) {
   /*
    * Single-layer perceptron. Binary classification only.
    */
-  def fit(train: DenseMatrix[Double], y: DenseVector[Int], maxIter: Int = 1000): Unit = {
+  def fit(train: DenseMatrix[Double], y: DenseVector[Int], maxIter: Int = 10000): Unit = {
     weights = DenseVector.zeros[Double](train.cols + 1)
     var iter = 1
 
