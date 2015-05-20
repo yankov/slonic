@@ -15,6 +15,8 @@ object NeuralNetworks extends App {
 //  val yPred = perceptron.predict(train)
 //  println(s"Weights: ${perceptron.weights}")
 
+  // 1 layer 5k = 3.2 lost
+  // 2 layer 5k = 2.8 lost (no reg)
   val nn = new ANN(inputSize = train.cols, nHidden = 2)
 
  // val ones = DenseVector.ones[Double](train.rows)

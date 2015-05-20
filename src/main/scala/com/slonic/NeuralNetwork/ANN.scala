@@ -2,13 +2,16 @@ package com.slonic.NeuralNetwork
 
 import breeze.linalg._
 import breeze.numerics._
+import breeze.stats.distributions.Rand
 
-class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0.8,
+import scala.annotation.tailrec
+
+class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0.3,
           ep: Double = 0.000001, maxIter: Int = 10000, C: Double = 1) {
 
   /* Constants for gradient checking */
   // Layer to check (running on all layers will take too long)
-  val LAYER_CHK = 2
+  val LAYER_CHK = 0
   // Number of neurons to check
   val NUM_NODES_CHK = 3
   // Number of weights to check (all of them by default)
@@ -17,48 +20,88 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
   // Acceptable order of difference between gradients
   val EPSILON_CHK = 10e-7
 
-  val lambda = alpha
-  var weights = (0 to nHidden).map(x =>
-    if (x < nHidden)
-      DenseMatrix.rand[Double](inputSize + 1, inputSize + 1)
-    else
-      DenseMatrix.rand[Double](nOutput, inputSize + 1)
-  ).toArray
+  // Number of nodes in a hidden layer
+  val LAYER_SIZE = 25
 
-  var D = (0 to nHidden).map(x =>
-    if(x < nHidden)
-      DenseMatrix.zeros[Double](inputSize + 1, inputSize + 1)
-    else
-      DenseMatrix.zeros[Double](nOutput, inputSize + 1)
-  ).toArray
+  val lambda = alpha
+//  var weights = (0 to nHidden).map(x =>
+//    if (x == 0)
+//      DenseMatrix.rand[Double](LAYER_SIZE, inputSize + 1, rand = Rand.gaussian) //* (2 * .12)) - .12
+//    else if (x < nHidden)
+//      DenseMatrix.rand[Double](LAYER_SIZE, LAYER_SIZE + 1, rand = Rand.gaussian) //* (2 * .12)) - .12
+//    else
+//      DenseMatrix.rand[Double](nOutput, LAYER_SIZE + 1, rand = Rand.gaussian) //* (2 * .12)) - .12
+//  ).toArray
+//
+//  var D = (0 to nHidden).map(x =>
+//    if (x == 0)
+//      DenseMatrix.zeros[Double](LAYER_SIZE, inputSize + 1)
+//    else if(x < nHidden)
+//      DenseMatrix.zeros[Double](LAYER_SIZE, LAYER_SIZE + 1)
+//    else
+//      DenseMatrix.zeros[Double](nOutput, LAYER_SIZE + 1)
+//  ).toArray
 
   // values for 'a' for different layers during forward-propagation
-  var aVec = DenseMatrix.zeros[Double](nHidden + 1, inputSize + 1)
+  var aVec: List[DenseVector[Double]] = List()
 
-  // Sigmoid function
-  def g(z: DenseVector[Double]) = {
+  def sigmoid(z: DenseVector[Double]): DenseVector[Double] = {
     val ones = DenseVector.ones[Double](z.length)
     ones / (exp(z) + 1.0)
   }
+
+  def inputLayer: DenseMatrix[Double] =
+    DenseMatrix.zeros[Double](LAYER_SIZE, inputSize + 1)
+
+  def hiddenLayer: DenseMatrix[Double] =
+    DenseMatrix.zeros[Double](LAYER_SIZE, LAYER_SIZE + 1)
+
+  def hiddenLayers(rand: Boolean = false): Array[DenseMatrix[Double]] =
+    (for(_ <- 0 to nHidden - 1) yield if(rand) randInit(hiddenLayer) else hiddenLayer).toArray
+
+  def outputLayer =
+    DenseMatrix.zeros[Double](nOutput, LAYER_SIZE + 1)
+
+  def randInit(x: DenseMatrix[Double]) =
+    DenseMatrix.rand[Double](x.rows, x.cols, rand = Rand.gaussian)
+
+
+  val weights: Array[DenseMatrix[Double]] =
+    randInit(inputLayer) +: hiddenLayers(rand = true) +: randInit(outputLayer) +: Array()
+
+  val D: Array[DenseMatrix[Double]] =
+    inputLayer +: hiddenLayers() +: outputLayer +: Array()
 
   // Forward propagation
   def h(x: DenseVector[Double], thetas: Array[DenseMatrix[Double]]): DenseVector[Double] = {
     var a = x
     var z = DenseVector[Double]()
-    aVec(0, ::).inner := a
+    aVec = List(a)
 
     for (l <- 0 to thetas.length - 1) {
       z = thetas(l) * a
-      a = g(z)
+      a = sigmoid(z)
 
       if(l < thetas.length - 1) {
-        a.update(0, 1.0) // set the bias unit to 1
-        aVec(l + 1, ::).inner := a
+        a = DenseVector(1.0 +: a.toArray) // add a bias unit
+        aVec = aVec :+ a
       }
     }
 
     a
   }
+
+  // Forward propagation
+//  @tailrec
+//  final def h(x: DenseVector[Double], thetas: Array[DenseMatrix[Double]]): DenseVector[Double] = {
+//   if(thetas.isEmpty)
+//      x(1 to -1)
+//    else {
+//      aVec = aVec :+ x
+//      val a = sigmoid(thetas.head * x).toArray
+//      h(DenseVector(1.0 +: a), thetas.tail)
+//    }
+//  }
 
   def binarize(ys: DenseVector[Int]): DenseMatrix[Double] = {
     val kl = ys.toArray.toSet
@@ -79,16 +122,21 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
     }
 
     if(regularize) {
-      j + thetas.map(t => sum(sum(t :* t, Axis._0))).sum * (lambda / (2 * m.toDouble))
+      j //+ thetas.map(t => sum(sum(t :* t, Axis._0))).sum * (lambda / (2 * m.toDouble))
     } else
       j
   }
+
+  def sigmoidGrad(a: DenseVector[Double]): DenseVector[Double] = {
+    val ones = DenseVector.ones[Double](a.length)
+    a :* (ones - a)
+  }
+
 
   def fit(train: DenseMatrix[Double], y: DenseVector[Int], maxIter: Int = 100000,
           checkGradients: Boolean = false): Unit = {
 
     val ys = binarize(y)
-    val ones = DenseVector.ones[Double](inputSize + 1)
     val bias = DenseMatrix.ones[Double](train.rows, 1)
     val trainI = DenseMatrix.horzcat(bias, train)
 
@@ -103,15 +151,16 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
       e = cost
       for (i <- 0 to m - 1) {
         var a = h(trainI(i, ::).inner, weights) // a4
-        var sigmoidGrad = DenseVector[Double]()
         var delta = a - ys(i, ::).inner // delta4
 
         for (l <- weights.length - 1 to 0 by - 1) {
-          a = aVec(l, ::).inner
+          a = aVec(l)
+          val t0 = D(l)(::, 0)
           D(l) = D(l) + (delta * a.t) // delta(l+1) * a.t(l)
+          D(l)(::, 0) := t0 :* delta  // bias deltas
 
-          sigmoidGrad = a :* (ones - a)
-          delta = (weights(l).t * delta) :* sigmoidGrad // delta(l) = theta(l) * delta(l+1) * a'
+          a = a.slice(1, a.length)
+          delta = (weights(l).t(1 to -1, ::) * delta) :* sigmoidGrad(a) // delta(l) = theta(l) * delta(l+1) * a'
         }
 
    /*
@@ -148,10 +197,10 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10, alpha: Double = 0
 
       // Update weights
       for (l <- 0 to weights.length - 1) {
-        val t = weights(l)(::, 0)
-        weights(l) = weights(l) + D(l) * alpha
-        weights(l)(::, 0) := t
+        weights(l)(::, 0) := D(l)(::, 0)
+        weights(l)(::, 1 to -1) := weights(l)(::, 1 to -1) + D(l)(::, 1 to -1) * alpha
       }
+
 
       cost = J(trainI, weights, ys)
       println(s"Cost $cost at epoch $nIter")
