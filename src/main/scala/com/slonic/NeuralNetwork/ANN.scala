@@ -5,9 +5,22 @@ import breeze.numerics._
 import breeze.stats.distributions.Rand
 import scala.annotation.tailrec
 import java.io.File
+import com.slonic.Metrics.accuracy
 
-class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
-          ep: Double = 0.000001) {
+class ANN(name: String, train: DenseMatrix[Double], labels: DenseVector[Int], nHidden: Int = 2,
+          layerSize: Int = 25, ep: Double = 10e-5) {
+
+  // Size of a training vector
+  val inputSize = train.cols
+
+  // Number of labels (size of the output vector)
+  val outputSize = labels.toArray.toSet.size
+
+  // Convert labels to a matrix of indicator variables
+  val y = binarize(labels)
+
+  // Add bias vector
+  val trainI = DenseMatrix.horzcat(DenseMatrix.ones[Double](train.rows, 1), train)
 
   /* Constants for gradient checking */
   // Layer to check (running on all layers will take too long)
@@ -22,33 +35,25 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
   // Acceptable order of difference between gradients
   val EPSILON_CHK = 10e-7
 
-  // Number of nodes in a hidden layer
-  val LAYER_SIZE = 25
-
-//  def sigmoid(z: DenseVector[Double]): DenseVector[Double] = {
-//    val ones = DenseVector.ones[Double](z.length)
-//    ones / (exp(-z) + 1.0)
-//  }
-
-  def sigmoidGrad(a: DenseVector[Double]): DenseVector[Double] = a :* (-a + 1.0)
+  // Weights are initialized from random gaussian with mean 0 and std 1
+  var weights: Array[DenseMatrix[Double]] = (0 to nHidden).map(createLayer).toArray
 
   def createLayer(n: Int): DenseMatrix[Double] = n match {
     // first hidden layer
-    case 0 => DenseMatrix.rand[Double](LAYER_SIZE, inputSize + 1, rand = Rand.gaussian)
+    case 0 => DenseMatrix.rand[Double](layerSize, inputSize + 1, rand = Rand.gaussian)
     // output layer
-    case `nHidden` => DenseMatrix.rand[Double](nOutput, LAYER_SIZE + 1, rand = Rand.gaussian)
+    case `nHidden` => DenseMatrix.rand[Double](outputSize, layerSize + 1, rand = Rand.gaussian)
     // other hidden layers
-    case _ => DenseMatrix.rand[Double](LAYER_SIZE, LAYER_SIZE + 1, rand = Rand.gaussian)
+    case _ => DenseMatrix.rand[Double](layerSize, layerSize + 1, rand = Rand.gaussian)
   }
+
+  def sigmoidGrad(a: DenseVector[Double]): DenseVector[Double] = a :* (-a + 1.0)
 
   def zeroCopy(mx: Array[DenseMatrix[Double]]) =
     mx.map(m => DenseMatrix.zeros[Double](m.rows, m.cols))
 
-  var weights: Array[DenseMatrix[Double]] = (0 to nHidden).map(createLayer).toArray
-
   def binarize(ys: DenseVector[Int]): DenseMatrix[Double] = {
-    val kl = ys.toArray.toSet
-    val ysBin = DenseMatrix.zeros[Double](ys.length, kl.size)
+    val ysBin = DenseMatrix.zeros[Double](ys.length, outputSize)
     ys.data.zipWithIndex.foreach{case (y, i) => ysBin.update(i, y - 1, 1.0)}
     ysBin
   }
@@ -56,6 +61,7 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
   def loss(y: DenseVector[Double], yPred: DenseVector[Double]): DenseVector[Double] =
     (-y :* log(yPred)) :- ((-y + 1.0) :* log(-yPred + 1.0))
 
+  // Cost function
   def J(x: DenseMatrix[Double], thetas: Array[DenseMatrix[Double]], y: DenseMatrix[Double], regularize: Boolean = true,
         lambda: Double = 0.8): Double = {
     val j = (1.0/x.rows) * sum(for {
@@ -65,12 +71,12 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
     } yield sum(loss(yi, yPred)))
 
     if(regularize) {
-      j + thetas.map(t => sum(sum(t :* t, Axis._0))).sum * (lambda / (2.0 * x.rows))
+      j + thetas.map(t => sum(sum(pow(t(::, 1 to -1), 2), Axis._0))).sum * (lambda / (2.0 * x.rows))
     } else
       j
   }
 
- // Forward propagation
+  // Forward propagation for a single training vector
   @tailrec
   final def h(x: DenseVector[Double], thetas: Array[DenseMatrix[Double]],
               aVec: List[DenseVector[Double]] = List()): (DenseVector[Double], List[DenseVector[Double]])= {
@@ -82,17 +88,23 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
     }
   }
 
-//  @tailrec
-//  final def h(x: DenseMatrix[Double], thetas: Array[DenseMatrix[Double]]): DenseMatrix[Double]= {
-//    if(thetas.isEmpty)
-//      x(::, 1 to -1)
-//    else {
-//      var a: DenseMatrix[Double] = sigmoid(thetas.head * x.t)
-//      a = DenseMatrix.horzcat(DenseMatrix.ones[Double](a.rows, 1), a)
-//      h(a, thetas.tail)
-//    }
-//  }
+  // Forward propagation for the entire training set
+  @tailrec
+  final def h(x: DenseMatrix[Double], thetas: Array[DenseMatrix[Double]]): DenseMatrix[Double]= {
+   if(thetas.isEmpty)
+      x(1 to -1, ::).t
+    else {
+      var a: DenseMatrix[Double] = if(thetas.length > 1)
+        sigmoid(thetas.head * x.t)
+       else {
+        sigmoid(thetas.head * x)
+      }
+      a = DenseMatrix.vertcat[Double](DenseMatrix.ones[Double](1, a.cols), a)
+      h(a, thetas.tail)
+    }
+  }
 
+  // Backpropagation. Returns matrix of gradients.
   def backpropagate(train: DenseMatrix[Double], ys: DenseMatrix[Double],
                     weights: Array[DenseMatrix[Double]]): Array[DenseMatrix[Double]] = {
 
@@ -115,36 +127,19 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
     D.map(_ :/ train.rows.toDouble)
   }
 
-  def train(train: DenseMatrix[Double], y: DenseVector[Int], maxIter: Int = 10000,
-            checkGradients: Boolean = false, restoreModel: Boolean = false,
+  def train(maxIter: Int = 10000, checkGradients: Boolean = false, restoreSnapshot: Boolean = false,
             lambda: Double = 0.8): Unit = {
 
-    val ys = binarize(y)
-    val bias = DenseMatrix.ones[Double](train.rows, 1)
-    val trainI = DenseMatrix.horzcat(bias, train)
-
-    if(restoreModel)
-      weights = readWeights
-    var cost = J(trainI, weights, ys, lambda = 0.8)
+    if(restoreSnapshot)
+      weights = readWeights(name)
+    var cost = J(trainI, weights, y, lambda = lambda)
     var nIter = 0
-
 
     // Backpropagation
     println(s"Initial cost $cost")
     while(nIter <= maxIter) {
 
-      val D = backpropagate(trainI, ys, weights)
-
-      // After the first run, compare values with numerically calculated gradients to make sure
-      // there are no errors in backprop implementation
-      if(nIter == 0 && checkGradients) {
-        println(s"Running gradient check for L=$LAYER_CHK")
-        val grOk = areGradsOk(trainI, ys, D, LAYER_CHK, NUM_NODES_CHK, NUM_WEIGHTS_CHK)
-        if(grOk)
-          println("Gradients check: PASSED!")
-        else
-          println("!!! Gradients check: FAILED!")
-      }
+      val D = backpropagate(trainI, y, weights)
 
       // Update weights
       for (l <- 0 to weights.length - 1) {
@@ -152,9 +147,24 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
         weights(l)(::, 1 to -1) := weights(l)(::, 1 to -1) - D(l)(::, 1 to -1) * lambda
       }
 
-      cost = J(trainI, weights, ys, lambda = 0.8)
+      // After the first run, compare values with numerically calculated gradients to make sure
+      // there are no errors in backprop implementation
+      if(nIter == 0 && checkGradients) {
+        println(s"Running gradient check for L=$LAYER_CHK")
+        val grOk = areGradsOk(D, LAYER_CHK, NUM_NODES_CHK, NUM_WEIGHTS_CHK)
+        if(grOk)
+          println("Gradients check: PASSED!")
+        else {
+          println("!!! Gradients check: FAILED!")
+          sys.exit(1)
+        }
+      }
+
+      cost = J(trainI, weights, y, lambda = lambda)
       println(s"Cost $cost at epoch $nIter")
-      if(nIter % 100 == 0) {
+      if((nIter + 1) % 100 == 0) {
+        val yPred = predict(train)
+        println("Accuracy: " + accuracy(labels, DenseVector(yPred:_*)))
         println(s"Saving the weights at epoch $nIter")
         saveWeights(weights)
       }
@@ -166,25 +176,24 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
   }
 
   // Check gradients for a given layer, nodes and weights
-  def areGradsOk(trainI: DenseMatrix[Double], ys: DenseMatrix[Double], D: Array[DenseMatrix[Double]],
-                 ln: Int, rows: Int, cols: Int): Boolean = {
-    val numGrads = numGrad(trainI, ys, ln, (0 to rows).toList, (0 to cols).toList)
+  def areGradsOk(D: Array[DenseMatrix[Double]], ln: Int, rows: Int, cols: Int): Boolean = {
+    val numGrads = numGrad(ln, (0 to rows).toList, (0 to cols).toList)
     val diff = abs(D(ln)(0 to rows, 0 to cols).t.toDenseVector) - abs(DenseVector(numGrads:_*))
     diff.forall(v => v < EPSILON_CHK)
   }
 
   // Calculate gradients numerically
-  def numGrad(trainI: DenseMatrix[Double], ys: DenseMatrix[Double], l: Int, rows: List[Int], cols: List[Int]): List[Double] = {
+  def numGrad(l: Int, rows: List[Int], cols: List[Int]): List[Double] = {
     val ws = weights.map(_.copy)
 
     for {
         row <- rows
         col <- cols
         _ = ws(l).update(row, col, ws(l)(row, col) + ep)
-        j1 = J(trainI, ws, ys, regularize = false)
+        j1 = J(trainI, ws, y, regularize = false)
 
         _ = ws(l).update(row, col, ws(l)(row, col) - 2 * ep)
-        j2 = J(trainI, ws, ys, regularize = false)
+        j2 = J(trainI, ws, y, regularize = false)
 
         _ = ws(l).update(row, col, ws(l)(row, col) + ep) // restoring the value
     } yield (j1 - j2) / (2 * ep)
@@ -192,23 +201,29 @@ class ANN(inputSize: Int, nHidden: Int = 2, nOutput: Int = 10,
   }
 
   def saveWeights(weights: Array[DenseMatrix[Double]]) =
-    weights.zipWithIndex.foreach{case (ws, i) =>  csvwrite(new File(s"models/theta${i+1}.csv"), ws)}
+    weights.zipWithIndex.foreach{case (ws, i) =>  csvwrite(new File(s"models/$name-theta${i+1}.csv"), ws)}
 
-  def readWeights: Array[DenseMatrix[Double]] =
-    (0 to nHidden).map(i => csvread(new File(s"models/theta${i+1}.csv"))).toArray
+  def readWeights(name: String): Array[DenseMatrix[Double]] =
+    (0 to nHidden).map(i => csvread(new File(s"models/$name-theta${i+1}.csv"))).toArray
 
+  def loadSnapshot(name: String) =
+    weights = readWeights(name)
 
-  def predictProba(test: DenseMatrix[Double]): DenseMatrix[Double] =
-    h(test, weights)
+  def predictProba(test: DenseMatrix[Double]): DenseMatrix[Double] = {
+    val bias = DenseMatrix.ones[Double](test.rows, 1)
+    val testI = DenseMatrix.horzcat(bias, test)
 
-//  def predict(test: DenseMatrix[Double]): List[Int] = {
-//    val yPred = h(test, weights)
-//    for {
-//      i <- 0 to yPred.rows - 1
-//      y = yPred(i,::).inner
-//    } yield y.findAll(_ == max(y))
-//  }
+    h(testI, weights)
+  }
 
+  def predict(test: DenseMatrix[Double]): List[Int] = {
+    val yPred = predictProba(test)
+    val preds = for {
+      i <- 0 to yPred.rows - 1
+      y = yPred(i,::).inner
+    } yield y.findAll(_ == max(y)).head
 
+    preds.map(_ + 1).toList
+  }
 
 }
