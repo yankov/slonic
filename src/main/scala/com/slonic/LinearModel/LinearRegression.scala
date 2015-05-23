@@ -24,7 +24,7 @@ class LinearRegression extends BaseEstimator {
    * fitMatrix - is a closed form solution. It is simple and fast,
    * but may perform badly if you have giant matrixes.
    *
-   * fitGradientDescent is a way to solve it using gradient descent (duh)
+   * fitGradientDescent is a way to solve it using gradient descent
    *
    * fitGradientDescentNonVec - same thing, but to calculate thetas insteas of
    * matrix/vectors operations I used simple loops. That is just maybe slightly easy

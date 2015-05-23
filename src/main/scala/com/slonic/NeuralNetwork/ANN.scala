@@ -94,7 +94,7 @@ class ANN(name: String, train: DenseMatrix[Double], labels: DenseVector[Int], nH
    if(thetas.isEmpty)
       x(1 to -1, ::).t
     else {
-      var a: DenseMatrix[Double] = if(thetas.length > 1)
+      var a: DenseMatrix[Double] = if(thetas.length == weights.length)
         sigmoid(thetas.head * x.t)
        else {
         sigmoid(thetas.head * x)
@@ -127,8 +127,8 @@ class ANN(name: String, train: DenseMatrix[Double], labels: DenseVector[Int], nH
     D.map(_ :/ train.rows.toDouble)
   }
 
-  def train(maxIter: Int = 10000, checkGradients: Boolean = false, restoreSnapshot: Boolean = false,
-            lambda: Double = 0.8): Unit = {
+  def train(alpha: Double = 0.8, lambda: Double = 0.01, maxIter: Int = 10000,
+            checkGradients: Boolean = false, restoreSnapshot: Boolean = false): Unit = {
 
     if(restoreSnapshot)
       weights = readWeights(name)
@@ -144,7 +144,7 @@ class ANN(name: String, train: DenseMatrix[Double], labels: DenseVector[Int], nH
       // Update weights
       for (l <- 0 to weights.length - 1) {
         weights(l)(::, 0) := D(l)(::, 0)
-        weights(l)(::, 1 to -1) := weights(l)(::, 1 to -1) - D(l)(::, 1 to -1) * lambda
+        weights(l)(::, 1 to -1) := weights(l)(::, 1 to -1) - D(l)(::, 1 to -1) * alpha
       }
 
       // After the first run, compare values with numerically calculated gradients to make sure
@@ -187,17 +187,16 @@ class ANN(name: String, train: DenseMatrix[Double], labels: DenseVector[Int], nH
     val ws = weights.map(_.copy)
 
     for {
-        row <- rows
-        col <- cols
-        _ = ws(l).update(row, col, ws(l)(row, col) + ep)
-        j1 = J(trainI, ws, y, regularize = false)
+      row <- rows
+      col <- cols
+      _ = ws(l).update(row, col, ws(l)(row, col) + ep)
+      j1 = J(trainI, ws, y, regularize = false)
 
-        _ = ws(l).update(row, col, ws(l)(row, col) - 2 * ep)
-        j2 = J(trainI, ws, y, regularize = false)
+      _ = ws(l).update(row, col, ws(l)(row, col) - 2 * ep)
+      j2 = J(trainI, ws, y, regularize = false)
 
-        _ = ws(l).update(row, col, ws(l)(row, col) + ep) // restoring the value
+      _ = ws(l).update(row, col, ws(l)(row, col) + ep) // restoring the value
     } yield (j1 - j2) / (2 * ep)
-
   }
 
   def saveWeights(weights: Array[DenseMatrix[Double]]) =

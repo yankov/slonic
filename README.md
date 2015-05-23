@@ -13,10 +13,11 @@ Done so far
     * Stochastic gradient descent
 * Logistic regression
 * Perceptron
+* Multilayer perceptron (MLP)
 
-Next in todo: Neural networks
+TODO:
 ====
 
-* Multi-layer neural network + backprop
+* RNN
 * Convolutional Neural Networks
 
